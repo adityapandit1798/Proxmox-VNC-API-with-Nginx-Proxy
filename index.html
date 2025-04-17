@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxmox VNC Console</title>
+    <style>
+        /* General styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+            background-color: #f4f4f9;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .message {
+            margin-top: 20px;
+            font-size: 14px;
+            color: green;
+        }
+        .error {
+            margin-top: 20px;
+            font-size: 14px;
+            color: red;
+        }
+        h1 {
+            color: #333;
+        }
+        p {
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Proxmox VNC Console</h1>
+        <p>Enter the VM ID below and click "Open VNC Console" to launch the console.</p>
+        <input type="text" id="vmIdInput" placeholder="Enter VM ID">
+        <button onclick="openVNCConsole()">Open VNC Console</button>
+        <div id="message" class="message"></div>
+        <div id="error" class="error"></div>
+    </div>
+
+    <script>
+        /**
+         * Function to handle opening the VNC console.
+         */
+        async function openVNCConsole() {
+            const vmId = document.getElementById('vmIdInput').value.trim();
+            const messageDiv = document.getElementById('message');
+            const errorDiv = document.getElementById('error');
+
+            // Clear previous messages
+            messageDiv.textContent = '';
+            errorDiv.textContent = '';
+
+            // Validate VM ID input
+            if (!vmId || isNaN(vmId)) {
+                errorDiv.textContent = 'Please enter a valid numeric VM ID.';
+                return;
+            }
+
+            try {
+                // Call the Flask backend API to fetch the VNC details
+                const response = await fetch(`/api/open-vnc?vmid=${vmId}`);
+                if (!response.ok) {
+                    // Handle non-JSON responses by falling back to plain text
+                    const errorData = await response.text();
+                    throw new Error(errorData || 'Failed to load VNC console.');
+                }
+
+                const data = await response.json();
+
+                // Inject the PVEAuthCookie into the browser's cookies
+                document.cookie = `PVEAuthCookie=${data.cookie}; path=/; Secure; SameSite=None`;
+
+                // Verify the cookie was set correctly
+                const cookies = document.cookie.split('; ').reduce((acc, cookie) => {
+                    const [key, value] = cookie.split('=');
+                    acc[key] = value;
+                    return acc;
+                }, {});
+
+                if (cookies['PVEAuthCookie'] === data.cookie) {
+                    messageDiv.textContent = 'Authentication successful!';
+                } else {
+                    errorDiv.textContent = 'Failed to set authentication cookie.';
+                    return;
+                }
+
+                // Open the VNC URL in a new tab
+                window.open(data.vncUrl, '_blank');
+
+            } catch (error) {
+                // Display any errors to the user
+                errorDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
